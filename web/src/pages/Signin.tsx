@@ -1,0 +1,219 @@
+import { useEffect, useRef, useState } from "react";
+import api from "../helpers/api";
+import { validate, ValidatorConfig } from "../helpers/validator";
+import useLoading from "../hooks/useLoading";
+import { locationService, userService } from "../services";
+import Only from "../components/common/OnlyWhen";
+import showAboutSiteDialog from "../components/AboutSiteDialog";
+import toastHelper from "../components/Toast";
+import "../less/signin.less";
+
+interface Props { }
+
+const validateConfig: ValidatorConfig = {
+	minLength: 4,
+	maxLength: 24,
+	noSpace: true,
+	noChinese: true,
+};
+
+const Signin: React.FC<Props> = () => {
+	const [username, setUsername] = useState("");
+	const [password, setPassword] = useState("");
+	const [showAutoSigninAsGuest, setShowAutoSigninAsGuest] = useState(true);
+	const signinBtnClickLoadingState = useLoading(false);
+	const autoSigninAsGuestBtn = useRef<HTMLDivElement>(null);
+	const signinBtn = useRef<HTMLButtonElement>(null);
+
+	useEffect(() => {
+		const handleKeyPress = (e: KeyboardEvent) => {
+			if (e.key === "Enter") {
+				autoSigninAsGuestBtn.current?.click();
+				signinBtn.current?.click();
+			}
+		};
+
+		document.body.addEventListener("keypress", handleKeyPress);
+
+		return () => {
+			document.body.removeEventListener("keypress", handleKeyPress);
+		};
+	}, []);
+
+	const handleUsernameInputChanged = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const text = e.target.value as string;
+		setUsername(text);
+	};
+
+	const handlePasswordInputChanged = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const text = e.target.value as string;
+		setPassword(text);
+	};
+
+	const handleAboutBtnClick = () => {
+		showAboutSiteDialog();
+	};
+
+	const handleSignInBtnClick = async () => {
+		if (signinBtnClickLoadingState.isLoading) {
+			return;
+		}
+
+		const usernameValidResult = validate(username, validateConfig);
+		if (!usernameValidResult.result) {
+			toastHelper.error("Username " + usernameValidResult.reason);
+			return;
+		}
+
+		const passwordValidResult = validate(password, validateConfig);
+		if (!passwordValidResult.result) {
+			toastHelper.error("Password " + passwordValidResult.reason);
+			return;
+		}
+
+		try {
+			signinBtnClickLoadingState.setLoading();
+			const actionFunc = api.signin;
+			const { succeed, message } = await actionFunc(username, password);
+
+			if (!succeed && message) {
+				toastHelper.error("😟 " + message);
+				return;
+			}
+
+			const user = await userService.doSignIn();
+			if (user) {
+				locationService.replaceHistory("/");
+			} else {
+				toastHelper.error("😟 Sign in failed");
+			}
+		} catch (error: any) {
+			console.error(error);
+			toastHelper.error("😟 " + error.message);
+		}
+		signinBtnClickLoadingState.setFinish();
+	};
+
+	const handleSwitchAccountSigninBtnClick = () => {
+		if (signinBtnClickLoadingState.isLoading) {
+			return;
+		}
+
+		setShowAutoSigninAsGuest(false);
+	};
+
+	const handleAutoSigninAsGuestBtnClick = async () => {
+		if (signinBtnClickLoadingState.isLoading) {
+			return;
+		}
+
+		try {
+			signinBtnClickLoadingState.setLoading();
+			console.log("test")
+			const { succeed, message } = await api.signin("guest", "123456");
+			console.log("test2")
+
+			if (!succeed && message) {
+				toastHelper.error("😟 " + message);
+				return;
+			}
+
+			const user = await userService.doSignIn();
+			if (user) {
+				locationService.replaceHistory("/");
+			} else {
+				toastHelper.error("😟 Sign in failed");
+			}
+		} catch (error: any) {
+			console.error(error);
+			toastHelper.error("😟 " + error.message);
+		}
+		signinBtnClickLoadingState.setFinish();
+	};
+
+	return (
+		<div className="page-wrapper signin">
+			<div className="page-container">
+				<div className="page-header-container">
+					<p className="title-text">
+						Sign in to Memos <span className="icon-text">✍️</span>
+					</p>
+				</div>
+				{showAutoSigninAsGuest ? (
+					<>
+						<div className="quickly-btns-container">
+							<div
+								ref={autoSigninAsGuestBtn}
+								className={`btn guest-signin ${signinBtnClickLoadingState.isLoading ? "requesting" : ""}`}
+								onClick={handleAutoSigninAsGuestBtnClick}
+							>
+								👉 Quick Guest Login
+							</div>
+							<div
+								className={`btn ${signinBtnClickLoadingState.isLoading ? "requesting" : ""}`}
+								onClick={handleSwitchAccountSigninBtnClick}
+							>
+								I have an account, sign in
+							</div>
+						</div>
+						<p className="tip-text">
+							For demonstration purposes only.
+							<br />
+							<span className="btn" onClick={handleAboutBtnClick}>
+								<span className="icon-text">🤠</span>
+								About This Site
+							</span>
+						</p>
+					</>
+				) : (
+					<>
+						<div className="page-content-container">
+							<div className="form-item-container input-form-container">
+								<span className={"normal-text " + (username === "" ? "" : "not-null")}>Username</span>
+								<input type="text" autoComplete="off" value={username} onChange={handleUsernameInputChanged} />
+							</div>
+							<div className="form-item-container input-form-container">
+								<span className={"normal-text " + (password === "" ? "" : "not-null")}>Password</span>
+								<input type="password" autoComplete="off" value={password} onChange={handlePasswordInputChanged} />
+							</div>
+						</div>
+						<div className="page-footer-container">
+							<div className="btns-container">
+								<Only when={window.location.origin.includes("justsven.top")}>
+									<a
+										className="btn-text"
+										href="https://github.com/login/oauth/authorize?client_id=187ba36888f152b06612&scope=read:user,gist"
+									>
+										Sign In with GitHub
+									</a>
+								</Only>
+							</div>
+							<div className="btns-container">
+								<button
+									className={`btn ${signinBtnClickLoadingState.isLoading ? "requesting" : ""}`}
+									onClick={handleAutoSigninAsGuestBtnClick}
+								>
+									Try Guest
+								</button>
+								<span className="split-text">/</span>
+								<button className="btn signup-btn disabled" onClick={() => toastHelper.info("Registration Closed")}>
+									Sign up
+								</button>
+								<span className="split-text">/</span>
+								<button
+									className={`btn signin-btn ${signinBtnClickLoadingState.isLoading ? "requesting" : ""}`}
+									ref={signinBtn}
+									onClick={handleSignInBtnClick}
+								>
+									Sign in
+								</button>
+							</div>
+						</div>
+					</>
+				)}
+			</div>
+		</div>
+	);
+};
+
+export default Signin;
